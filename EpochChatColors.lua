@@ -168,9 +168,33 @@ function IsIn(iitxt, iichr)
     return false
 end
 
-
 function ECCHighlightStrs(message)
     if not message or message == "" then return message end
+
+    local savedLinks, linkIdx = nil, 0
+
+    if string.find(message, "|H", 1, true) then
+        savedLinks = {}
+
+        local function saveLink(link)
+            linkIdx = linkIdx + 1
+            local key = "\1ECCL" .. linkIdx .. "\1"
+            savedLinks[key] = link
+            return key
+        end
+
+        message = string.gsub(
+            message,
+            "|c%x%x%x%x%x%x%x%x|H[^|]+|h%[[^%]]+%]|h|r",
+            saveLink
+        )
+
+        message = string.gsub(
+            message,
+            "|H[^|]+|h%[[^%]]+%]|h",
+            saveLink
+        )
+    end
 
     if string.upper(strsub(message, -2)) == ":(" then
         message = strsub(message, 1, -3)..CLRED..":("
@@ -180,12 +204,15 @@ function ECCHighlightStrs(message)
 
     local lmessage = strlower(message)
     local s, e
+
     for tcf = 1, #chReplace1 do
         s, e = strfind(lmessage, chReplace1[tcf])
         if s and e then
             message = strsub(message, 1, s - 1)..chReplace2[tcf]..strsub(message, e + 1)
             s, e = strfind(strlower(message), chReplace1[tcf])
-            if s and e then message = strsub(message, 1, s - 1)..chReplace2[tcf]..strsub(message, e + 1) end
+            if s and e then
+                message = strsub(message, 1, s - 1)..chReplace2[tcf]..strsub(message, e + 1)
+            end
         end
     end
 
@@ -193,9 +220,35 @@ function ECCHighlightStrs(message)
     local seps = " .,?!;/()+=@&#*"
     local stxt, wtxt = {}, {}
     local sep, word, chr = "", "", ""
-    for i = 1, strlen(message) do
+
+    local i = 1
+    while i <= strlen(message) do
         chr = strsub(message, i, i)
-        if IsIn(seps, chr) then
+
+        if chr == "\1" then
+            if strlen(word) > 0 then
+                wtxt[num] = word
+                num = num + 1
+                word = ""
+            end
+            if strlen(sep) > 0 then
+                stxt[num] = sep
+                sep = ""
+            end
+
+            local j = i + 1
+            while j <= strlen(message) and strsub(message, j, j) ~= "\1" do
+                j = j + 1
+            end
+
+            local token = strsub(message, i, j)
+            num = num + 1
+            wtxt[num] = token
+            stxt[num] = ""
+
+            i = j
+
+        elseif IsIn(seps, chr) then
             if strlen(word) > 0 then
                 wtxt[num] = word
                 num = num + 1
@@ -203,6 +256,7 @@ function ECCHighlightStrs(message)
                 sep = ""
             end
             sep = sep..chr
+
         else
             if strlen(sep) > 0 or i == 1 then
                 if i == 1 then num = num + 1 end
@@ -212,74 +266,111 @@ function ECCHighlightStrs(message)
             end
             word = word..chr
         end
+
+        i = i + 1
     end
-    if strlen(sep) > 0 then stxt[num] = sep; num = num - 1
-    elseif strlen(word) > 0 then wtxt[num] = word; stxt[num + 1] = "" end
+
+    if strlen(sep) > 0 then
+        stxt[num] = sep
+        num = num - 1
+    elseif strlen(word) > 0 then
+        wtxt[num] = word
+        stxt[num + 1] = ""
+    end
 
     for wrd = 1, num do
-        local lword = strlower(wtxt[wrd])
-        for tcf = 1, #chatUP do
-            if lword == chatUP[tcf] then wtxt[wrd] = strupper(wtxt[wrd]) end
-        end
-        for tcf = 1, #chLocBig do
-            if wtxt[wrd] == chLocBig[tcf] then wtxt[wrd] = CLOCATION..wtxt[wrd].."|r"; lword = "" end
-        end
-        for tcf = 1, #chLocation do
-            if lword == chLocation[tcf] then wtxt[wrd] = CLOCATION..wtxt[wrd].."|r" end
-        end
-        for tcf = 1, #chGreen do
-            if lword == chGreen[tcf] then wtxt[wrd] = CROLEGREEN..wtxt[wrd].."|r" end
-        end
-        for tcf = 1, #chRed do
-            if lword == chRed[tcf] then wtxt[wrd] = CLIGHTRED..wtxt[wrd].."|r" end
-        end
-        for tcf = 1, #chBlue do
-            if lword == chBlue[tcf] then wtxt[wrd] = CLFMBLUE..wtxt[wrd].."|r" end
-        end
-        for tcf = 1, #chLGreen do
-            if lword == chLGreen[tcf] then wtxt[wrd] = CWTSGREEN..wtxt[wrd].."|r" end
-        end
-        if lword == "mage" or lword == "mages" or lword == "frostmage" or lword == "firemage" then
-            wtxt[wrd] = "|cff69ccf0"..wtxt[wrd].."|r"
-        elseif lword == "warlock" or lword == "warlocks" or lword == "locks" or wtxt[wrd] == "lock" then
-            wtxt[wrd] = "|cff9482c9"..wtxt[wrd].."|r"
-        elseif lword == "priest" or lword == "priests" or lword == "holypriests" then
-            wtxt[wrd] = "|cffffffff"..wtxt[wrd].."|r"
-        elseif lword == "druid" or lword == "druids" or lword == "restodruid" or lword == "feraldruid"
-            or lword == "drood" or lword == "droods" or lword == "boomkin" or lword == "moonkin" then
-            wtxt[wrd] = "|cffff7d0a"..wtxt[wrd].."|r"
-        elseif lword == "shaman" or lword == "shamans" then
-            wtxt[wrd] = "|cff0070de"..wtxt[wrd].."|r"
-        elseif lword == "paladin" or lword == "paladins" or lword == "retri" or lword == "retpal"
-            or lword == "retpala" or lword == "pala" or lword == "palas" or lword == "holy" or lword == "prot" then
-            wtxt[wrd] = "|cfff58cba"..wtxt[wrd].."|r"
-        elseif lword == "rogue" or lword == "rogues" or lword == "rouge" then
-            wtxt[wrd] = "|cfffff569"..wtxt[wrd].."|r"
-        elseif lword == "hunter" or lword == "hunters" or lword == "huntard" or lword == "hunt" then
-            wtxt[wrd] = "|cffabd473"..wtxt[wrd].."|r"
-        elseif lword == "warrior" or lword == "warriors" or lword == "warrs" or lword == "fury"
-            or lword == "arms-warrior" then
-            wtxt[wrd] = "|cffc79c6e"..wtxt[wrd].."|r"
-        end
-    end
+        local word = wtxt[wrd]
 
-    if wtxt[1] and strlen(wtxt[1]) > 3 then
-        local pre3 = strlower(strsub(wtxt[1], 1, 3))
-        if (pre3 == "wts" or pre3 == "wtb") and strsub(strlower(wtxt[1]), 4, 4) ~= " " then
-            wtxt[1] = CWTSGREEN..strupper(strsub(wtxt[1], 1, 3)).."|r "..strsub(wtxt[1], 4)
+        if word and not string.find(word, "\1ECCL", 1, true) then
+            local lword = strlower(word)
+
+            for tcf = 1, #chatUP do
+                if lword == chatUP[tcf] then
+                    wtxt[wrd] = strupper(word)
+                end
+            end
+
+            for tcf = 1, #chLocBig do
+                if word == chLocBig[tcf] then
+                    wtxt[wrd] = CLOCATION..word.."|r"
+                    lword = ""
+                end
+            end
+
+            for tcf = 1, #chLocation do
+                if lword == chLocation[tcf] then
+                    wtxt[wrd] = CLOCATION..word.."|r"
+                end
+            end
+
+            for tcf = 1, #chGreen do
+                if lword == chGreen[tcf] then
+                    wtxt[wrd] = CROLEGREEN..word.."|r"
+                end
+            end
+
+            for tcf = 1, #chRed do
+                if lword == chRed[tcf] then
+                    wtxt[wrd] = CLIGHTRED..word.."|r"
+                end
+            end
+
+            for tcf = 1, #chBlue do
+                if lword == chBlue[tcf] then
+                    wtxt[wrd] = CLFMBLUE..word.."|r"
+                end
+            end
+
+            for tcf = 1, #chLGreen do
+                if lword == chLGreen[tcf] then
+                    wtxt[wrd] = CWTSGREEN..word.."|r"
+                end
+            end
+
+            if lword == "mage" or lword == "mages" or lword == "frostmage" or lword == "firemage" then
+                wtxt[wrd] = "|cff69ccf0"..word.."|r"
+            elseif lword == "warlock" or lword == "warlocks" or lword == "locks" or word == "lock" then
+                wtxt[wrd] = "|cff9482c9"..word.."|r"
+            elseif lword == "priest" or lword == "priests" or lword == "holypriests" then
+                wtxt[wrd] = "|cffffffff"..word.."|r"
+            elseif lword == "druid" or lword == "druids" or lword == "restodruid" or lword == "feraldruid"
+                or lword == "drood" or lword == "droods" or lword == "boomkin" or lword == "moonkin" then
+                wtxt[wrd] = "|cffff7d0a"..word.."|r"
+            elseif lword == "shaman" or lword == "shamans" then
+                wtxt[wrd] = "|cff0070de"..word.."|r"
+            elseif lword == "paladin" or lword == "paladins" or lword == "retri" or lword == "retpal"
+                or lword == "retpala" or lword == "pala" or lword == "palas" or lword == "holy" or lword == "prot" then
+                wtxt[wrd] = "|cfff58cba"..word.."|r"
+            elseif lword == "rogue" or lword == "rogues" or lword == "rouge" then
+                wtxt[wrd] = "|cfffff569"..word.."|r"
+            elseif lword == "hunter" or lword == "hunters" or lword == "huntard" or lword == "hunt" then
+                wtxt[wrd] = "|cffabd473"..word.."|r"
+            elseif lword == "warrior" or lword == "warriors" or lword == "warrs" or lword == "fury"
+                or lword == "arms-warrior" then
+                wtxt[wrd] = "|cffc79c6e"..word.."|r"
+            end
         end
     end
 
     message = ""
-    for i = 1, num do message = message..stxt[i]..wtxt[i] end
-    message = message..stxt[num + 1]
+    for i = 1, num do
+        message = message..(stxt[i] or "")..(wtxt[i] or "")
+    end
+    message = message..(stxt[num + 1] or "")
+
     message = string.gsub(message, "%+%-", "\194\177")
     message = string.gsub(message, "%-%+", "\194\177")
-    message = string.gsub(message, ":%(",  CLRED..":%(|r")
+    message = string.gsub(message, ":%(", CLRED..":%(|r")
     message = string.gsub(message, "<AFK>", CLRED.."<AFK>|r")
+
+    if savedLinks then
+        for key, link in pairs(savedLinks) do
+            message = string.gsub(message, key, link)
+        end
+    end
+
     return message
 end
-
 
 function EpochChangeGuildChat(message)
     local umsg = string.upper(message)
